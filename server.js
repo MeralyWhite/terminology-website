@@ -1,5 +1,5 @@
 // 术语管理系统 - 主服务器文件
-// 这是一个完整的术语查询和管理系统，支持多用户协作
+// 修复版本 - 解决视图路径问题
 
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const useragent = require('useragent');
@@ -33,19 +34,28 @@ const ADMIN_EMAIL = 'z-2024@qq.com';
 app.use(helmet());
 app.use(cors());
 
-// 速率限制 - 防止滥用
+// 速率限制
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 100 // 每个IP最多100个请求
+  windowMs: 15 * 60 * 1000,
+  max: 100
 });
 app.use(limiter);
 
 // 中间件配置
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// 视图引擎配置 - 修复版本
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
+const viewsPath = path.resolve(__dirname, 'views');
+app.set('views', viewsPath);
+
+console.log('📁 视图配置:');
+console.log('  - 工作目录:', process.cwd());
+console.log('  - __dirname:', __dirname);
+console.log('  - 视图路径:', viewsPath);
+console.log('  - 视图目录存在:', fs.existsSync(viewsPath));
 
 // 会话配置
 app.use(session({
@@ -54,30 +64,27 @@ app.use(session({
   saveUninitialized: false,
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24小时
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
 // 数据库初始化
-const db = new sqlite3.Database(process.env.DATABASE_PATH || './database.sqlite');
+const db = new sqlite3.Database('terminology.db');
 
-// 创建数据库表
-db.serialize(() => {
-  // 用户表 - 管理员密码加密，员工密码明文
+function initializeDatabase() {
+  console.log('🗄️ 正在初始化数据库...');
+  
+  // 用户表
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    password_plain TEXT,
     role TEXT DEFAULT 'user',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME,
-    last_login_ip TEXT,
-    last_login_location TEXT,
-    login_count INTEGER DEFAULT 0,
-    is_online INTEGER DEFAULT 0,
-    force_password_change INTEGER DEFAULT 0
+    is_active BOOLEAN DEFAULT 1,
+    profile_data TEXT
   )`);
 
   // 术语表
@@ -85,26 +92,23 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     term TEXT NOT NULL,
     definition TEXT NOT NULL,
-    category TEXT,
+    category_id INTEGER,
     language TEXT DEFAULT 'zh',
     source TEXT,
-    notes TEXT,
+    examples TEXT,
+    synonyms TEXT,
+    antonyms TEXT,
+    difficulty_level INTEGER DEFAULT 1,
+    usage_frequency INTEGER DEFAULT 0,
     created_by INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users (id)
-  )`);
-
-  // 术语翻译表（支持多语言）
-  db.run(`CREATE TABLE IF NOT EXISTS term_translations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    term_id INTEGER,
-    language TEXT NOT NULL,
-    translation TEXT NOT NULL,
-    definition TEXT,
-    created_by INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (term_id) REFERENCES terms (id),
+    is_approved BOOLEAN DEFAULT 0,
+    tags TEXT,
+    pronunciation TEXT,
+    etymology TEXT,
+    related_terms TEXT,
+    FOREIGN KEY (category_id) REFERENCES categories (id),
     FOREIGN KEY (created_by) REFERENCES users (id)
   )`);
 
@@ -113,136 +117,88 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    parent_id INTEGER,
+    color TEXT DEFAULT '#007bff',
+    icon TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES categories (id)
   )`);
 
-  // 登录日志表
-  db.run(`CREATE TABLE IF NOT EXISTS login_logs (
+  // 用户活动日志表
+  db.run(`CREATE TABLE IF NOT EXISTS user_activities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
-    username TEXT,
-    login_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ip_address TEXT,
-    location TEXT,
-    user_agent TEXT,
-    login_result TEXT,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-  )`);
-
-  // 活动日志表
-  db.run(`CREATE TABLE IF NOT EXISTS activity_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    username TEXT,
-    action TEXT,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id INTEGER,
     details TEXT,
     ip_address TEXT,
+    user_agent TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
-});
 
-// 获取客户端真实IP地址
-function getClientIP(req) {
-  return req.headers['x-forwarded-for'] || 
-         req.headers['x-real-ip'] || 
-         req.connection.remoteAddress || 
-         req.socket.remoteAddress ||
-         (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
-         '127.0.0.1';
+  // 术语评分表
+  db.run(`CREATE TABLE IF NOT EXISTS term_ratings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    term_id INTEGER,
+    user_id INTEGER,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (term_id) REFERENCES terms (id),
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    UNIQUE(term_id, user_id)
+  )`);
+
+  // 收藏表
+  db.run(`CREATE TABLE IF NOT EXISTS favorites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    term_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (term_id) REFERENCES terms (id),
+    UNIQUE(user_id, term_id)
+  )`);
+
+  // 学习进度表
+  db.run(`CREATE TABLE IF NOT EXISTS learning_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    term_id INTEGER,
+    mastery_level INTEGER DEFAULT 0,
+    last_reviewed DATETIME,
+    review_count INTEGER DEFAULT 0,
+    correct_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (term_id) REFERENCES terms (id),
+    UNIQUE(user_id, term_id)
+  )`);
+
+  // 插入默认分类
+  db.run(`INSERT OR IGNORE INTO categories (name, description, color, icon) VALUES 
+    ('计算机科学', '计算机科学相关术语', '#007bff', 'fas fa-laptop-code'),
+    ('数学', '数学相关术语', '#28a745', 'fas fa-calculator'),
+    ('物理学', '物理学相关术语', '#dc3545', 'fas fa-atom'),
+    ('化学', '化学相关术语', '#ffc107', 'fas fa-flask'),
+    ('生物学', '生物学相关术语', '#17a2b8', 'fas fa-dna'),
+    ('医学', '医学相关术语', '#6f42c1', 'fas fa-heartbeat'),
+    ('工程学', '工程学相关术语', '#fd7e14', 'fas fa-cogs'),
+    ('经济学', '经济学相关术语', '#20c997', 'fas fa-chart-line'),
+    ('法律', '法律相关术语', '#6c757d', 'fas fa-balance-scale'),
+    ('语言学', '语言学相关术语', '#e83e8c', 'fas fa-language')`);
+
+  // 创建管理员账户
+  const adminPassword = bcrypt.hashSync('admin123', 10);
+  db.run(`INSERT OR IGNORE INTO users (username, email, password, role) VALUES (?, ?, ?, ?)`,
+    ['admin', ADMIN_EMAIL, adminPassword, 'admin']);
+
+  console.log('✅ 数据库初始化完成');
 }
 
-// 获取IP地理位置信息（详细地址）
-async function getLocationFromIP(ip) {
-  try {
-    // 如果是本地IP，返回默认位置
-    if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
-      return '本地网络';
-    }
-
-    // 使用免费的IP地理位置API（支持中文，更详细）
-    const response = await axios.get(`http://ip-api.com/json/${ip}?lang=zh-CN&fields=status,message,country,regionName,city,district,zip,lat,lon,timezone,isp,org,as,query`);
-    
-    if (response.data.status === 'success') {
-      const data = response.data;
-      // 构建详细地址
-      let location = '';
-      if (data.country) location += data.country;
-      if (data.regionName) location += data.regionName;
-      if (data.city) location += data.city;
-      if (data.district) location += data.district;
-      
-      // 添加ISP信息
-      if (data.isp) location += ` (${data.isp})`;
-      
-      return location || '未知位置';
-    } else {
-      return '位置解析失败';
-    }
-  } catch (error) {
-    console.error('获取地理位置失败:', error.message);
-    return '位置解析失败';
-  }
-}
-
-// 发送异常登录邮件通知
-async function sendAbnormalLoginAlert(username, ip, location, reason) {
-  try {
-    const mailOptions = {
-      from: process.env.EMAIL_USER || 'system@terminology.com',
-      to: ADMIN_EMAIL,
-      subject: `[术语系统] 异常登录提醒 - ${username}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #e74c3c;">🚨 异常登录提醒</h2>
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
-            <p><strong>用户名:</strong> ${username}</p>
-            <p><strong>IP地址:</strong> ${ip}</p>
-            <p><strong>登录位置:</strong> ${location}</p>
-            <p><strong>异常原因:</strong> ${reason}</p>
-            <p><strong>时间:</strong> ${new Date().toLocaleString('zh-CN')}</p>
-          </div>
-          <p style="color: #666;">请及时检查该账户的安全状况。</p>
-          <hr>
-          <p style="font-size: 12px; color: #999;">此邮件由术语管理系统自动发送</p>
-        </div>
-      `
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`异常登录邮件已发送: ${username} from ${location}`);
-  } catch (error) {
-    console.error('发送邮件失败:', error.message);
-  }
-}
-
-// 记录登录日志
-async function logLogin(userId, username, ip, location, userAgent, result) {
-  return new Promise((resolve, reject) => {
-    db.run(
-      'INSERT INTO login_logs (user_id, username, ip_address, location, user_agent, login_result) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, username, ip, location, userAgent, result],
-      function(err) {
-        if (err) reject(err);
-        else resolve(this.lastID);
-      }
-    );
-  });
-}
-
-// 记录用户活动
-async function logActivity(userId, username, action, details, ip) {
-  return new Promise((resolve, reject) => {
-    db.run(
-      'INSERT INTO activity_logs (user_id, username, action, details, ip_address) VALUES (?, ?, ?, ?, ?)',
-      [userId, username, action, details, ip],
-      function(err) {
-        if (err) reject(err);
-        else resolve(this.lastID);
-      }
-    );
-  });
-}
 // 认证中间件
 function requireAuth(req, res, next) {
   if (req.session.userId) {
@@ -261,30 +217,140 @@ function requireAdmin(req, res, next) {
   }
 }
 
-// 路由定义
+// 记录用户活动
+function logActivity(userId, action, targetType = null, targetId = null, details = null, req = null) {
+  const ipAddress = req ? req.ip : null;
+  const userAgent = req ? req.get('User-Agent') : null;
+  
+  db.run(`INSERT INTO user_activities (user_id, action, target_type, target_id, details, ip_address, user_agent) 
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [userId, action, targetType, targetId, details, ipAddress, userAgent]);
+}
 
-// 首页 - 术语搜索
+// 安全渲染函数 - 防止视图错误
+function safeRender(res, view, data = {}) {
+  try {
+    res.render(view, data);
+  } catch (error) {
+    console.error(`渲染 ${view} 时出错:`, error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html lang="zh-CN">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>系统错误 - 术语管理系统</title>
+          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+      </head>
+      <body>
+          <div class="container mt-5">
+              <div class="alert alert-danger">
+                  <h4>🚫 系统错误</h4>
+                  <p>视图渲染失败，请联系管理员。</p>
+                  <p><strong>错误:</strong> ${error.message}</p>
+                  <div class="mt-3">
+                      <a href="/" class="btn btn-primary">返回首页</a>
+                      <a href="/test" class="btn btn-secondary">系统诊断</a>
+                  </div>
+              </div>
+          </div>
+      </body>
+      </html>
+    `);
+  }
+}
+
+// ==================== 路由定义 ====================
+
+// 系统诊断页面
+app.get('/test', (req, res) => {
+    const viewsDir = app.get('views');
+    let viewsContent = '目录不存在';
+
+    if (fs.existsSync(viewsDir)) {
+        try {
+            viewsContent = fs.readdirSync(viewsDir).map(file => {
+                const filePath = path.join(viewsDir, file);
+                const stats = fs.statSync(filePath);
+                return `${file} (${stats.size} bytes)`;
+            }).join('\n');
+        } catch (err) {
+            viewsContent = `读取目录出错: ${err.message}`;
+        }
+    }
+
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>系统诊断</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-4">
+                <h1>🔧 系统诊断</h1>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header"><h5>📁 路径信息</h5></div>
+                            <div class="card-body">
+                                <p><strong>工作目录:</strong><br><code>${process.cwd()}</code></p>
+                                <p><strong>__dirname:</strong><br><code>${__dirname}</code></p>
+                                <p><strong>视图路径:</strong><br><code>${viewsDir}</code></p>
+                                <p><strong>Node.js:</strong> ${process.version}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header"><h5>📄 视图文件</h5></div>
+                            <div class="card-body">
+                                <p><strong>目录存在:</strong> ${fs.existsSync(viewsDir) ? '✅' : '❌'}</p>
+                                <pre style="background: #f8f9fa; padding: 10px;">${viewsContent}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <a href="/" class="btn btn-primary">返回首页</a>
+                </div>
+            </div>
+        </body>
+        </html>
+    `);
+});
+
+// 主页 - 术语查询
 app.get('/', (req, res) => {
   const searchQuery = req.query.q || '';
   const category = req.query.category || '';
-  const language = req.query.lang || 'zh';
-  
-  let sql = `
-    SELECT t.*, u.username as creator, c.name as category_name
-    FROM terms t
-    LEFT JOIN users u ON t.created_by = u.id
-    LEFT JOIN categories c ON t.category = c.name
-    WHERE 1=1
-  `;
-  const params = [];
+  const language = req.query.language || '';
+  const page = parseInt(req.query.page) || 1;
+  const limit = 20;
+  const offset = (page - 1) * limit;
+
+  let sql = `SELECT t.*, c.name as category_name, c.color as category_color,
+             u.username as created_by_username,
+             AVG(tr.rating) as avg_rating,
+             COUNT(tr.rating) as rating_count
+             FROM terms t
+             LEFT JOIN categories c ON t.category_id = c.id
+             LEFT JOIN users u ON t.created_by = u.id
+             LEFT JOIN term_ratings tr ON t.id = tr.term_id
+             WHERE t.is_approved = 1`;
+
+  let params = [];
 
   if (searchQuery) {
-    sql += ` AND (t.term LIKE ? OR t.definition LIKE ?)`;
-    params.push(`%${searchQuery}%`, `%${searchQuery}%`);
+    sql += ` AND (t.term LIKE ? OR t.definition LIKE ? OR t.tags LIKE ?)`;
+    const searchPattern = `%${searchQuery}%`;
+    params.push(searchPattern, searchPattern, searchPattern);
   }
 
   if (category) {
-    sql += ` AND t.category = ?`;
+    sql += ` AND c.name = ?`;
     params.push(category);
   }
 
@@ -293,7 +359,8 @@ app.get('/', (req, res) => {
     params.push(language);
   }
 
-  sql += ` ORDER BY t.updated_at DESC LIMIT 50`;
+  sql += ` GROUP BY t.id ORDER BY t.usage_frequency DESC, t.created_at DESC LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
 
   db.all(sql, params, (err, terms) => {
     if (err) {
@@ -308,17 +375,19 @@ app.get('/', (req, res) => {
         categories = [];
       }
 
-      res.render('index', {
+      const user = req.session.userId ? {
+        id: req.session.userId,
+        username: req.session.username,
+        role: req.session.userRole
+      } : null;
+
+      safeRender(res, 'index', {
         terms,
         categories,
         searchQuery,
         selectedCategory: category,
         selectedLanguage: language,
-        user: req.session.userId ? { 
-          id: req.session.userId, 
-          username: req.session.username,
-          role: req.session.userRole 
-        } : null
+        user
       });
     });
   });
@@ -326,157 +395,95 @@ app.get('/', (req, res) => {
 
 // 登录页面
 app.get('/login', (req, res) => {
-  res.render('login', { error: null });
-});
-
-// 登录处理 - 增强版本，支持IP监控和异常检测
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  const clientIP = getClientIP(req);
-  const userAgent = req.headers['user-agent'] || '';
-  
-  try {
-    // 获取地理位置
-    const location = await getLocationFromIP(clientIP);
-    
-    // 查找用户
-    db.get('SELECT * FROM users WHERE username = ? OR email = ?', [username, username], async (err, user) => {
-      if (err) {
-        console.error(err);
-        await logLogin(null, username, clientIP, location, userAgent, '系统错误');
-        return res.render('login', { error: '系统错误' });
-      }
-
-      if (!user) {
-        await logLogin(null, username, clientIP, location, userAgent, '用户不存在');
-        return res.render('login', { error: '用户名或密码错误' });
-      }
-
-      let passwordMatch = false;
-      
-      // 管理员密码验证（加密）
-      if (user.role === 'admin') {
-        try {
-          passwordMatch = await bcrypt.compare(password, user.password);
-        } catch (bcryptErr) {
-          console.error('密码验证错误:', bcryptErr);
-          await logLogin(user.id, user.username, clientIP, location, userAgent, '密码验证失败');
-          return res.render('login', { error: '系统错误' });
-        }
-      } else {
-        // 员工密码验证（明文）
-        passwordMatch = (password === user.password_plain);
-      }
-
-      if (!passwordMatch) {
-        await logLogin(user.id, user.username, clientIP, location, userAgent, '密码错误');
-        return res.render('login', { error: '用户名或密码错误' });
-      }
-
-      // 检查异常登录
-      let isAbnormal = false;
-      let abnormalReason = '';
-
-      // 检查是否从新位置登录
-      if (user.last_login_location && user.last_login_location !== location) {
-        isAbnormal = true;
-        abnormalReason = `从新位置登录: ${location} (上次: ${user.last_login_location})`;
-      }
-
-      // 检查是否从新IP登录
-      if (user.last_login_ip && user.last_login_ip !== clientIP) {
-        if (!isAbnormal) {
-          isAbnormal = true;
-          abnormalReason = `从新IP登录: ${clientIP} (上次: ${user.last_login_ip})`;
-        }
-      }
-
-      // 如果是异常登录，发送邮件通知
-      if (isAbnormal && user.role !== 'admin') {
-        await sendAbnormalLoginAlert(user.username, clientIP, location, abnormalReason);
-      }
-
-      // 登录成功
-      req.session.userId = user.id;
-      req.session.username = user.username;
-      req.session.userRole = user.role;
-
-      // 更新用户登录信息
-      db.run(`
-        UPDATE users 
-        SET last_login = CURRENT_TIMESTAMP, 
-            last_login_ip = ?, 
-            last_login_location = ?, 
-            login_count = login_count + 1,
-            is_online = 1
-        WHERE id = ?
-      `, [clientIP, location, user.id]);
-
-      // 记录成功登录日志
-      await logLogin(user.id, user.username, clientIP, location, userAgent, '登录成功');
-      await logActivity(user.id, user.username, '用户登录', `从 ${location} 登录`, clientIP);
-
-      // 检查是否需要强制修改密码
-      if (user.force_password_change === 1 && user.role !== 'admin') {
-        res.redirect('/change-password?first=1');
-      } else {
-        res.redirect('/dashboard');
-      }
-    });
-  } catch (error) {
-    console.error('登录处理错误:', error);
-    res.render('login', { error: '系统错误，请稍后重试' });
+  if (req.session.userId) {
+    return res.redirect('/dashboard');
   }
+  safeRender(res, 'login', { error: null });
 });
 
-// 移除公开注册功能 - 只允许管理员创建用户账户
+// 登录处理
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return safeRender(res, 'login', { error: '请输入用户名和密码' });
+  }
+
+  db.get('SELECT * FROM users WHERE username = ? AND is_active = 1', [username], (err, user) => {
+    if (err) {
+      console.error(err);
+      return safeRender(res, 'login', { error: '系统错误，请稍后重试' });
+    }
+
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      return safeRender(res, 'login', { error: '用户名或密码错误' });
+    }
+
+    // 设置会话
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    req.session.userRole = user.role;
+
+    // 更新最后登录时间
+    db.run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+
+    // 记录登录活动
+    logActivity(user.id, 'login', null, null, null, req);
+
+    res.redirect('/dashboard');
+  });
+});
+
+// 注销
+app.post('/logout', (req, res) => {
+  if (req.session.userId) {
+    logActivity(req.session.userId, 'logout', null, null, null, req);
+  }
+  req.session.destroy();
+  res.redirect('/');
+});
 
 // 用户仪表板
 app.get('/dashboard', requireAuth, (req, res) => {
-  // 获取用户创建的术语统计
-  db.get('SELECT COUNT(*) as count FROM terms WHERE created_by = ?', [req.session.userId], (err, result) => {
+  // 获取用户统计信息
+  const userId = req.session.userId;
+
+  db.get(`SELECT COUNT(*) as term_count FROM terms WHERE created_by = ?`, [userId], (err, termStats) => {
     if (err) {
       console.error(err);
-      return res.status(500).send('数据库错误');
+      termStats = { term_count: 0 };
     }
 
-    const userTermsCount = result.count;
-
-    // 获取最近的术语
-    db.all(`
-      SELECT t.*, c.name as category_name 
-      FROM terms t 
-      LEFT JOIN categories c ON t.category = c.name 
-      WHERE t.created_by = ? 
-      ORDER BY t.updated_at DESC 
-      LIMIT 10
-    `, [req.session.userId], (err, recentTerms) => {
+    db.get(`SELECT COUNT(*) as favorite_count FROM favorites WHERE user_id = ?`, [userId], (err, favoriteStats) => {
       if (err) {
         console.error(err);
-        recentTerms = [];
+        favoriteStats = { favorite_count: 0 };
       }
 
-      res.render('dashboard', {
+      safeRender(res, 'dashboard', {
         user: {
           id: req.session.userId,
           username: req.session.username,
           role: req.session.userRole
         },
-        userTermsCount,
-        recentTerms
+        stats: {
+          terms: termStats.term_count,
+          favorites: favoriteStats.favorite_count
+        }
       });
     });
   });
 });
+
 // 添加术语页面
 app.get('/add-term', requireAuth, (req, res) => {
-  // 获取所有分类
   db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
     if (err) {
       console.error(err);
       categories = [];
     }
-    res.render('add-term', { 
+
+    safeRender(res, 'add-term', {
       user: {
         id: req.session.userId,
         username: req.session.username,
@@ -491,454 +498,71 @@ app.get('/add-term', requireAuth, (req, res) => {
 
 // 添加术语处理
 app.post('/add-term', requireAuth, (req, res) => {
-  const { term, definition, category, language, source, notes } = req.body;
+  const { term, definition, category_id, language, source, examples, tags, pronunciation, etymology } = req.body;
 
   if (!term || !definition) {
-    return res.render('add-term', { 
-      error: '术语和定义是必填项',
-      success: null,
-      categories: [],
-      user: {
-        id: req.session.userId,
-        username: req.session.username,
-        role: req.session.userRole
-      }
-    });
-  }
-
-  db.run(`
-    INSERT INTO terms (term, definition, category, language, source, notes, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [term, definition, category || null, language || 'zh', source || null, notes || null, req.session.userId], 
-  function(err) {
-    if (err) {
-      console.error(err);
-      return res.render('add-term', { 
-        error: '添加术语失败',
-        success: null,
-        categories: [],
-        user: {
-          id: req.session.userId,
-          username: req.session.username,
-          role: req.session.userRole
-        }
-      });
-    }
-
-    res.redirect('/dashboard?success=术语添加成功');
-  });
-});
-
-// 编辑术语页面
-app.get('/edit-term/:id', requireAuth, (req, res) => {
-  const termId = req.params.id;
-
-  db.get('SELECT * FROM terms WHERE id = ?', [termId], (err, term) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('数据库错误');
-    }
-
-    if (!term) {
-      return res.status(404).send('术语不存在');
-    }
-
-    // 检查权限：只有创建者或管理员可以编辑
-    if (term.created_by !== req.session.userId && req.session.userRole !== 'admin') {
-      return res.status(403).send('没有权限编辑此术语');
-    }
-
-    // 获取所有分类
-    db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
-      if (err) {
-        console.error(err);
-        categories = [];
-      }
-
-      res.render('edit-term', {
-        term,
-        categories,
-        user: {
-          id: req.session.userId,
-          username: req.session.username,
-          role: req.session.userRole
-        },
-        error: null,
+    return db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
+      safeRender(res, 'add-term', {
+        user: { id: req.session.userId, username: req.session.username, role: req.session.userRole },
+        categories: categories || [],
+        error: '术语和定义不能为空',
         success: null
       });
     });
-  });
-});
-
-// 编辑术语处理
-app.post('/edit-term/:id', requireAuth, (req, res) => {
-  const termId = req.params.id;
-  const { term, definition, category, language, source, notes } = req.body;
-
-  if (!term || !definition) {
-    return res.redirect(`/edit-term/${termId}?error=术语和定义是必填项`);
   }
 
-  // 检查权限
-  db.get('SELECT created_by FROM terms WHERE id = ?', [termId], (err, termData) => {
+  const isApproved = req.session.userRole === 'admin' ? 1 : 0;
+
+  db.run(`INSERT INTO terms (term, definition, category_id, language, source, examples, tags,
+           pronunciation, etymology, created_by, is_approved)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [term, definition, category_id || null, language || 'zh', source, examples, tags,
+     pronunciation, etymology, req.session.userId, isApproved], function(err) {
+
     if (err) {
       console.error(err);
-      return res.status(500).send('数据库错误');
-    }
-
-    if (!termData) {
-      return res.status(404).send('术语不存在');
-    }
-
-    if (termData.created_by !== req.session.userId && req.session.userRole !== 'admin') {
-      return res.status(403).send('没有权限编辑此术语');
-    }
-
-    // 更新术语
-    db.run(`
-      UPDATE terms 
-      SET term = ?, definition = ?, category = ?, language = ?, source = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [term, definition, category || null, language || 'zh', source || null, notes || null, termId], 
-    function(err) {
-      if (err) {
-        console.error(err);
-        return res.redirect(`/edit-term/${termId}?error=更新失败`);
-      }
-
-      res.redirect('/dashboard?success=术语更新成功');
-    });
-  });
-});
-
-// 删除术语
-app.post('/delete-term/:id', requireAuth, (req, res) => {
-  const termId = req.params.id;
-
-  // 检查权限
-  db.get('SELECT created_by FROM terms WHERE id = ?', [termId], (err, term) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: '数据库错误' });
-    }
-
-    if (!term) {
-      return res.status(404).json({ error: '术语不存在' });
-    }
-
-    if (term.created_by !== req.session.userId && req.session.userRole !== 'admin') {
-      return res.status(403).json({ error: '没有权限删除此术语' });
-    }
-
-    // 删除术语
-    db.run('DELETE FROM terms WHERE id = ?', [termId], function(err) {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: '删除失败' });
-      }
-
-      res.json({ success: true });
-    });
-  });
-});
-
-// 管理员面板 - 增强版本
-app.get('/admin', requireAdmin, (req, res) => {
-  // 获取统计信息
-  db.get('SELECT COUNT(*) as userCount FROM users', (err, userStats) => {
-    if (err) {
-      console.error(err);
-      userStats = { userCount: 0 };
-    }
-
-    db.get('SELECT COUNT(*) as termCount FROM terms', (err, termStats) => {
-      if (err) {
-        console.error(err);
-        termStats = { termCount: 0 };
-      }
-
-      db.get('SELECT COUNT(*) as categoryCount FROM categories', (err, categoryStats) => {
-        if (err) {
-          console.error(err);
-          categoryStats = { categoryCount: 0 };
-        }
-
-        // 获取在线用户数
-        db.get('SELECT COUNT(*) as onlineCount FROM users WHERE is_online = 1', (err, onlineStats) => {
-          if (err) {
-            console.error(err);
-            onlineStats = { onlineCount: 0 };
-          }
-
-          res.render('admin', {
-            user: {
-              id: req.session.userId,
-              username: req.session.username,
-              role: req.session.userRole
-            },
-            stats: {
-              users: userStats.userCount,
-              terms: termStats.termCount,
-              categories: categoryStats.categoryCount,
-              online: onlineStats.onlineCount
-            }
-          });
-        });
-      });
-    });
-  });
-});
-
-// 管理员 - 用户管理页面
-app.get('/admin/users', requireAdmin, (req, res) => {
-  db.all(`
-    SELECT id, username, email, password_plain, role, created_at, 
-           last_login, last_login_ip, last_login_location, login_count, is_online
-    FROM users 
-    ORDER BY created_at DESC
-  `, (err, users) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('数据库错误');
-    }
-
-    res.render('admin-users', {
-      user: {
-        id: req.session.userId,
-        username: req.session.username,
-        role: req.session.userRole
-      },
-      users: users
-    });
-  });
-});// 管理员 - 创建用户
-app.post('/admin/create-user', requireAdmin, async (req, res) => {
-  const { username, email, password, role } = req.body;
-  const clientIP = getClientIP(req);
-
-  if (!username || !email || !password) {
-    return res.status(400).json({ error: '请填写所有必填字段' });
-  }
-
-  try {
-    // 检查用户名和邮箱是否已存在
-    const existingUser = await new Promise((resolve, reject) => {
-      db.get('SELECT id FROM users WHERE username = ? OR email = ?', [username, email], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ error: '用户名或邮箱已存在' });
-    }
-
-    // 创建用户
-    const userRole = role || 'user';
-    let hashedPassword = '';
-    let plainPassword = '';
-
-    if (userRole === 'admin') {
-      // 管理员密码加密存储
-      hashedPassword = await bcrypt.hash(password, 10);
-    } else {
-      // 员工密码明文存储
-      plainPassword = password;
-      hashedPassword = await bcrypt.hash('temp-password', 10); // 临时加密密码
-    }
-
-    const userId = await new Promise((resolve, reject) => {
-      db.run(`
-        INSERT INTO users (username, email, password, password_plain, role, force_password_change) 
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [username, email, hashedPassword, plainPassword, userRole, userRole === 'user' ? 1 : 0], function(err) {
-        if (err) reject(err);
-        else resolve(this.lastID);
-      });
-    });
-
-    // 记录管理员操作
-    await logActivity(req.session.userId, req.session.username, '创建用户', `创建了用户: ${username} (${userRole})`, clientIP);
-
-    res.json({ 
-      success: true, 
-      message: '用户创建成功',
-      user: {
-        id: userId,
-        username: username,
-        email: email,
-        role: userRole,
-        password: userRole === 'user' ? plainPassword : '(加密存储)'
-      }
-    });
-  } catch (error) {
-    console.error('创建用户失败:', error);
-    res.status(500).json({ error: '创建用户失败' });
-  }
-});
-
-// 管理员 - 重置用户密码
-app.post('/admin/reset-password', requireAdmin, async (req, res) => {
-  const { userId, newPassword } = req.body;
-  const clientIP = getClientIP(req);
-
-  if (!userId || !newPassword) {
-    return res.status(400).json({ error: '请提供用户ID和新密码' });
-  }
-
-  try {
-    // 获取用户信息
-    const user = await new Promise((resolve, reject) => {
-      db.get('SELECT username, role FROM users WHERE id = ?', [userId], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: '用户不存在' });
-    }
-
-    // 更新密码
-    if (user.role === 'admin') {
-      // 管理员密码加密存储
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      await new Promise((resolve, reject) => {
-        db.run('UPDATE users SET password = ?, force_password_change = 0 WHERE id = ?', 
-          [hashedPassword, userId], (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    } else {
-      // 员工密码明文存储
-      await new Promise((resolve, reject) => {
-        db.run('UPDATE users SET password_plain = ?, force_password_change = 1 WHERE id = ?', 
-          [newPassword, userId], (err) => {
-          if (err) reject(err);
-          else resolve();
+      return db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
+        safeRender(res, 'add-term', {
+          user: { id: req.session.userId, username: req.session.username, role: req.session.userRole },
+          categories: categories || [],
+          error: '添加术语失败，请重试',
+          success: null
         });
       });
     }
 
-    // 记录管理员操作
-    await logActivity(req.session.userId, req.session.username, '重置密码', `重置了用户 ${user.username} 的密码`, clientIP);
+    logActivity(req.session.userId, 'create_term', 'term', this.lastID, term, req);
 
-    res.json({ success: true, message: '密码重置成功' });
-  } catch (error) {
-    console.error('重置密码失败:', error);
-    res.status(500).json({ error: '重置密码失败' });
-  }
-});
-
-// 管理员 - 登录日志
-app.get('/admin/login-logs', requireAdmin, (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = 50;
-  const offset = (page - 1) * limit;
-
-  db.all(`
-    SELECT * FROM login_logs 
-    ORDER BY login_time DESC 
-    LIMIT ? OFFSET ?
-  `, [limit, offset], (err, logs) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('数据库错误');
-    }
-
-    res.render('admin-logs', {
-      user: {
-        id: req.session.userId,
-        username: req.session.username,
-        role: req.session.userRole
-      },
-      logs: logs,
-      currentPage: page
+    db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
+      safeRender(res, 'add-term', {
+        user: { id: req.session.userId, username: req.session.username, role: req.session.userRole },
+        categories: categories || [],
+        error: null,
+        success: isApproved ? '术语添加成功！' : '术语已提交，等待管理员审核'
+      });
     });
-  });
-});
-
-// 管理员 - 活动日志
-app.get('/admin/activity-logs', requireAdmin, (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = 50;
-  const offset = (page - 1) * limit;
-
-  db.all(`
-    SELECT * FROM activity_logs 
-    ORDER BY created_at DESC 
-    LIMIT ? OFFSET ?
-  `, [limit, offset], (err, logs) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('数据库错误');
-    }
-
-    res.render('admin-activity', {
-      user: {
-        id: req.session.userId,
-        username: req.session.username,
-        role: req.session.userRole
-      },
-      logs: logs,
-      currentPage: page
-    });
-  });
-});
-
-// API路由 - 搜索建议
-app.get('/api/search', (req, res) => {
-  const query = req.query.q || '';
-  const limit = parseInt(req.query.limit) || 10;
-
-  if (!query || query.length < 2) {
-    return res.json([]);
-  }
-
-  db.all(`
-    SELECT term, definition 
-    FROM terms 
-    WHERE term LIKE ? OR definition LIKE ? 
-    ORDER BY term 
-    LIMIT ?
-  `, [`%${query}%`, `%${query}%`, limit], (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: '搜索失败' });
-    }
-
-    res.json(results);
-  });
-});
-
-// 注销 - 更新在线状态
-app.post('/logout', async (req, res) => {
-  if (req.session.userId) {
-    // 更新用户离线状态
-    db.run('UPDATE users SET is_online = 0 WHERE id = ?', [req.session.userId]);
-    
-    // 记录登出活动
-    const clientIP = getClientIP(req);
-    await logActivity(req.session.userId, req.session.username, '用户登出', '用户退出系统', clientIP);
-  }
-
-  req.session.destroy((err) => {
-    if (err) {
-      console.error(err);
-    }
-    res.redirect('/');
   });
 });
 
 // 404处理
 app.use((req, res) => {
   res.status(404).send(`
-    <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-      <h1>404 - 页面未找到</h1>
-      <p>您访问的页面不存在</p>
-      <a href="/" style="color: #007bff; text-decoration: none;">返回首页</a>
-    </div>
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>404 - 页面未找到</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+        <div class="container mt-5 text-center">
+            <h1>404 - 页面未找到</h1>
+            <p>您访问的页面不存在</p>
+            <a href="/" class="btn btn-primary">返回首页</a>
+        </div>
+    </body>
+    </html>
   `);
 });
 
@@ -946,11 +570,22 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send(`
-    <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-      <h1>500 - 服务器错误</h1>
-      <p>服务器遇到了一个错误</p>
-      <a href="/" style="color: #007bff; text-decoration: none;">返回首页</a>
-    </div>
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>500 - 服务器错误</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+        <div class="container mt-5 text-center">
+            <h1>500 - 服务器错误</h1>
+            <p>服务器遇到了一个错误</p>
+            <a href="/" class="btn btn-primary">返回首页</a>
+        </div>
+    </body>
+    </html>
   `);
 });
 
@@ -963,8 +598,12 @@ app.listen(PORT, () => {
 📍 访问地址: http://localhost:${PORT}
 📊 环境: ${process.env.NODE_ENV || 'development'}
 📧 管理员邮箱: ${ADMIN_EMAIL}
+🔧 系统诊断: http://localhost:${PORT}/test
 ===========================================
   `);
+
+  // 初始化数据库
+  initializeDatabase();
 });
 
 // 优雅关闭
@@ -978,5 +617,4 @@ process.on('SIGINT', () => {
     }
     process.exit(0);
   });
-
 });
