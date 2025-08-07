@@ -1,0 +1,374 @@
+<%- include('layout', { title: '用户仪表板 - 术语管理系统', body: `
+<div class="container mt-4">
+    <!-- 欢迎区域 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px;">
+                <div class="card-body text-white p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-2">
+                                <i class="fas fa-tachometer-alt me-3"></i>
+                                欢迎回来，${user.username}！
+                            </h2>
+                            <p class="mb-0 opacity-75">
+                                ${user.role === 'admin' ? '管理员' : '员工'} • 
+                                今天是 ${new Date().toLocaleDateString('zh-CN', { 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric',
+                                    weekday: 'long'
+                                })}
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <div class="d-flex flex-column align-items-md-end">
+                                <div class="mb-2">
+                                    <span class="badge bg-light text-dark px-3 py-2">
+                                        <i class="fas fa-user me-1"></i>
+                                        ${user.role === 'admin' ? '系统管理员' : '系统用户'}
+                                    </span>
+                                </div>
+                                <small class="opacity-75">
+                                    <i class="fas fa-clock me-1"></i>
+                                    最后登录: ${new Date().toLocaleString('zh-CN')}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="fas fa-book fa-3x text-primary"></i>
+                    </div>
+                    <h3 class="text-primary mb-2">${userTermsCount}</h3>
+                    <p class="text-muted mb-0">我创建的术语</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="fas fa-plus-circle fa-3x text-success"></i>
+                    </div>
+                    <h3 class="text-success mb-2">
+                        <a href="/add-term" class="text-decoration-none text-success">+</a>
+                    </h3>
+                    <p class="text-muted mb-0">
+                        <a href="/add-term" class="text-decoration-none text-muted">添加新术语</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="fas fa-search fa-3x text-info"></i>
+                    </div>
+                    <h3 class="text-info mb-2">
+                        <a href="/" class="text-decoration-none text-info">∞</a>
+                    </h3>
+                    <p class="text-muted mb-0">
+                        <a href="/" class="text-decoration-none text-muted">搜索术语</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        ${user.role === 'admin' ? `
+            <div class="col-md-3 mb-3">
+                <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                    <div class="card-body text-center p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-cog fa-3x text-warning"></i>
+                        </div>
+                        <h3 class="text-warning mb-2">
+                            <a href="/admin" class="text-decoration-none text-warning">⚙</a>
+                        </h3>
+                        <p class="text-muted mb-0">
+                            <a href="/admin" class="text-decoration-none text-muted">系统管理</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        ` : `
+            <div class="col-md-3 mb-3">
+                <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                    <div class="card-body text-center p-4">
+                        <div class="mb-3">
+                            <i class="fas fa-chart-line fa-3x text-secondary"></i>
+                        </div>
+                        <h3 class="text-secondary mb-2">${recentTerms.length}</h3>
+                        <p class="text-muted mb-0">最近更新</p>
+                    </div>
+                </div>
+            </div>
+        `}
+    </div>
+
+    <div class="row">
+        <!-- 最近的术语 -->
+        <div class="col-lg-8 mb-4">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2 text-primary"></i>
+                            我最近的术语
+                        </h5>
+                        <a href="/add-term" class="btn btn-primary btn-sm btn-custom">
+                            <i class="fas fa-plus me-1"></i>添加新术语
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    ${recentTerms.length > 0 ? `
+                        <div class="list-group list-group-flush">
+                            ${recentTerms.map((term, index) => `
+                                <div class="list-group-item border-0 p-4 ${index === recentTerms.length - 1 ? '' : 'border-bottom'}">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-2 text-primary">${term.term}</h6>
+                                            <p class="mb-2 text-muted" style="font-size: 0.9rem;">
+                                                ${term.definition.length > 100 ? term.definition.substring(0, 100) + '...' : term.definition}
+                                            </p>
+                                            <div class="d-flex align-items-center">
+                                                ${term.category_name ? `
+                                                    <span class="badge bg-light text-dark me-2">
+                                                        <i class="fas fa-tag me-1"></i>${term.category_name}
+                                                    </span>
+                                                ` : ''}
+                                                <small class="text-muted">
+                                                    <i class="fas fa-clock me-1"></i>
+                                                    ${new Date(term.updated_at).toLocaleDateString('zh-CN')}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div class="ms-3">
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="/edit-term/${term.id}" 
+                                                   class="btn btn-outline-primary btn-sm"
+                                                   title="编辑术语">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <button onclick="deleteTerm(${term.id}, '${term.term}')" 
+                                                        class="btn btn-outline-danger btn-sm"
+                                                        title="删除术语">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        ${recentTerms.length >= 10 ? `
+                            <div class="card-footer bg-transparent border-0 text-center p-3">
+                                <a href="/?created_by=${user.id}" class="text-decoration-none">
+                                    查看我的所有术语 <i class="fas fa-arrow-right ms-1"></i>
+                                </a>
+                            </div>
+                        ` : ''}
+                    ` : `
+                        <div class="text-center py-5">
+                            <i class="fas fa-book-open fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted mb-3">还没有创建任何术语</h6>
+                            <p class="text-muted mb-4">开始添加您的第一个术语吧！</p>
+                            <a href="/add-term" class="btn btn-primary btn-custom">
+                                <i class="fas fa-plus me-2"></i>添加第一个术语
+                            </a>
+                        </div>
+                    `}
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速操作和信息 -->
+        <div class="col-lg-4">
+            <!-- 快速操作 -->
+            <div class="card border-0 shadow-sm mb-4" style="border-radius: 15px;">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2 text-warning"></i>
+                        快速操作
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="d-grid gap-2">
+                        <a href="/add-term" class="btn btn-primary btn-custom">
+                            <i class="fas fa-plus me-2"></i>添加新术语
+                        </a>
+                        <a href="/" class="btn btn-outline-primary btn-custom">
+                            <i class="fas fa-search me-2"></i>搜索术语
+                        </a>
+                        ${user.role === 'admin' ? `
+                            <a href="/admin" class="btn btn-outline-warning btn-custom">
+                                <i class="fas fa-cog me-2"></i>系统管理
+                            </a>
+                            <a href="/admin/users" class="btn btn-outline-info btn-custom">
+                                <i class="fas fa-users me-2"></i>用户管理
+                            </a>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统信息 -->
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2 text-info"></i>
+                        系统信息
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">账户类型</span>
+                            <span class="badge ${user.role === 'admin' ? 'bg-warning' : 'bg-primary'}">
+                                ${user.role === 'admin' ? '管理员' : '员工'}
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">用户名</span>
+                            <span class="fw-bold">${user.username}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">创建术语数</span>
+                            <span class="fw-bold text-primary">${userTermsCount}</span>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="fas fa-shield-alt me-1"></i>
+                            您的登录信息已被安全记录
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 自定义样式 -->
+<style>
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.list-group-item {
+    transition: background-color 0.3s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+}
+
+.stats-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* 动画效果 */
+.card {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .btn-group-sm {
+        flex-direction: column;
+    }
+    
+    .btn-group-sm .btn {
+        margin-bottom: 0.25rem;
+        border-radius: 0.375rem !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 添加卡片点击效果
+    const statCards = document.querySelectorAll('.stats-card');
+    statCards.forEach(card => {
+        card.addEventListener('click', function() {
+            const link = this.querySelector('a');
+            if (link) {
+                window.location.href = link.href;
+            }
+        });
+    });
+    
+    // 检查URL参数中的成功消息
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    if (success) {
+        showAlert(success, 'success');
+        // 清除URL参数
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+});
+
+// 显示提示消息
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = \`alert alert-\${type} alert-dismissible fade show alert-custom\`;
+    alertDiv.innerHTML = \`
+        <i class="fas fa-\${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+        \${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    \`;
+    
+    const container = document.querySelector('.container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // 3秒后自动消失
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 3000);
+}
+</script>
+` }) %>

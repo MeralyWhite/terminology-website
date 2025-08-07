@@ -1,0 +1,241 @@
+<%- include('layout', { title: '术语查询 - 术语管理系统', body: `
+<!-- 搜索区域 -->
+<div class="search-container">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <h1 class="text-center mb-4">
+                    <i class="fas fa-search me-3"></i>术语查询系统
+                </h1>
+                <p class="text-center mb-4 opacity-75">
+                    快速查找和管理专业术语，支持多语言和分类检索
+                </p>
+                
+                <form action="/" method="GET" class="row g-3">
+                    <div class="col-md-6">
+                        <input type="text" 
+                               class="form-control search-box" 
+                               id="searchInput"
+                               name="q" 
+                               placeholder="输入术语或定义关键词..." 
+                               value="${searchQuery}"
+                               autocomplete="off">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control search-box" name="category">
+                            <option value="">所有分类</option>
+                            ${categories.map(cat => `
+                                <option value="${cat.name}" ${selectedCategory === cat.name ? 'selected' : ''}>
+                                    ${cat.name}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-search w-100">
+                            <i class="fas fa-search me-2"></i>搜索
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <!-- 侧边栏 -->
+        <div class="col-lg-3">
+            <div class="sidebar">
+                <h5><i class="fas fa-filter me-2"></i>筛选选项</h5>
+                
+                <!-- 分类筛选 -->
+                <div class="mb-4">
+                    <h6 class="text-muted mb-3">按分类</h6>
+                    <a href="/" class="filter-option ${!selectedCategory ? 'active' : ''}">
+                        <i class="fas fa-list me-2"></i>所有分类
+                    </a>
+                    ${categories.map(cat => `
+                        <a href="/?category=${encodeURIComponent(cat.name)}" 
+                           class="filter-option ${selectedCategory === cat.name ? 'active' : ''}">
+                            <i class="fas fa-tag me-2"></i>${cat.name}
+                        </a>
+                    `).join('')}
+                </div>
+                
+                <!-- 语言筛选 -->
+                <div class="mb-4">
+                    <h6 class="text-muted mb-3">按语言</h6>
+                    <a href="/?lang=zh" class="filter-option ${selectedLanguage === 'zh' ? 'active' : ''}">
+                        <i class="fas fa-globe me-2"></i>中文
+                    </a>
+                    <a href="/?lang=en" class="filter-option ${selectedLanguage === 'en' ? 'active' : ''}">
+                        <i class="fas fa-globe me-2"></i>English
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 统计信息 -->
+            <div class="stats-card">
+                <div class="stats-number">${terms.length}</div>
+                <div>搜索结果</div>
+            </div>
+            
+            ${user ? `
+                <div class="sidebar">
+                    <h5><i class="fas fa-plus me-2"></i>快速操作</h5>
+                    <a href="/add-term" class="btn btn-primary btn-custom w-100 mb-2">
+                        <i class="fas fa-plus me-2"></i>添加新术语
+                    </a>
+                    <a href="/dashboard" class="btn btn-outline-primary btn-custom w-100">
+                        <i class="fas fa-tachometer-alt me-2"></i>我的仪表板
+                    </a>
+                </div>
+            ` : `
+                <div class="sidebar">
+                    <h5><i class="fas fa-sign-in-alt me-2"></i>员工登录</h5>
+                    <p class="text-muted small mb-3">使用管理员提供的账号登录系统</p>
+                    <a href="/login" class="btn btn-primary btn-custom w-100">
+                        <i class="fas fa-sign-in-alt me-2"></i>员工登录
+                    </a>
+                </div>
+            `}
+        </div>
+        
+        <!-- 主要内容区域 -->
+        <div class="col-lg-9">
+            ${searchQuery ? `
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4 class="mb-0">
+                        <i class="fas fa-search me-2 text-primary"></i>
+                        搜索结果: "${searchQuery}"
+                    </h4>
+                    <span class="badge bg-primary">${terms.length} 个结果</span>
+                </div>
+            ` : `
+                <div class="mb-4">
+                    <h4 class="mb-2">
+                        <i class="fas fa-book me-2 text-primary"></i>
+                        ${selectedCategory ? selectedCategory : '所有术语'}
+                    </h4>
+                    <p class="text-muted">浏览和搜索专业术语库</p>
+                </div>
+            `}
+            
+            <!-- 术语列表 -->
+            <div class="row">
+                ${terms.length > 0 ? terms.map(term => `
+                    <div class="col-12">
+                        <div class="card term-card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <h5 class="term-title mb-0">${term.term}</h5>
+                                    <div>
+                                        ${term.category ? `<span class="badge category-badge me-2">${term.category}</span>` : ''}
+                                        <span class="badge language-badge">${term.language === 'zh' ? '中文' : term.language.toUpperCase()}</span>
+                                    </div>
+                                </div>
+                                
+                                <p class="term-definition">${term.definition}</p>
+                                
+                                ${term.notes ? `
+                                    <div class="mb-3">
+                                        <small class="text-muted">
+                                            <i class="fas fa-sticky-note me-1"></i>
+                                            <strong>备注:</strong> ${term.notes}
+                                        </small>
+                                    </div>
+                                ` : ''}
+                                
+                                ${term.source ? `
+                                    <div class="mb-3">
+                                        <small class="text-muted">
+                                            <i class="fas fa-book-open me-1"></i>
+                                            <strong>来源:</strong> ${term.source}
+                                        </small>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="term-meta d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="fas fa-user me-1"></i>
+                                        <small>创建者: ${term.creator || '未知'}</small>
+                                        <span class="mx-2">•</span>
+                                        <i class="fas fa-clock me-1"></i>
+                                        <small>创建时间: ${new Date(term.created_at).toLocaleDateString('zh-CN')}</small>
+                                    </div>
+                                    
+                                    ${user && (user.id === term.created_by || user.role === 'admin') ? `
+                                        <div>
+                                            <a href="/edit-term/${term.id}" class="btn btn-sm btn-outline-primary me-2">
+                                                <i class="fas fa-edit"></i> 编辑
+                                            </a>
+                                            <button onclick="deleteTerm(${term.id}, '${term.term}')" 
+                                                    class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash"></i> 删除
+                                            </button>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') : `
+                    <div class="col-12">
+                        <div class="text-center py-5">
+                            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">没有找到匹配的术语</h5>
+                            <p class="text-muted">
+                                ${searchQuery ? '尝试使用不同的关键词或筛选条件' : '暂无术语数据'}
+                            </p>
+                            ${user ? `
+                                <a href="/add-term" class="btn btn-primary btn-custom mt-3">
+                                    <i class="fas fa-plus me-2"></i>添加第一个术语
+                                </a>
+                            ` : `
+                                <p class="text-muted mt-3">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    请联系管理员获取账号以添加术语
+                                </p>
+                            `}
+                        </div>
+                    </div>
+                `}
+            </div>
+            
+            <!-- 分页 (如果需要的话) -->
+            ${terms.length >= 50 ? `
+                <div class="d-flex justify-content-center mt-4">
+                    <nav>
+                        <ul class="pagination">
+                            <li class="page-item disabled">
+                                <span class="page-link">上一页</span>
+                            </li>
+                            <li class="page-item active">
+                                <span class="page-link">1</span>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="#">下一页</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            ` : ''}
+        </div>
+    </div>
+</div>
+
+<!-- 快速搜索提示 -->
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info alert-custom">
+                <i class="fas fa-lightbulb me-2"></i>
+                <strong>搜索提示:</strong> 
+                您可以搜索术语名称、定义内容，或使用分类和语言筛选来快速找到所需的术语。
+                ${!user ? '请联系管理员获取账号以添加和管理术语。' : ''}
+            </div>
+        </div>
+    </div>
+</div>
+` }) %>

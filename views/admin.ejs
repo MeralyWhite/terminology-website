@@ -1,0 +1,513 @@
+<%- include('layout', { title: '管理员面板 - 术语管理系统', body: `
+<div class="container mt-4">
+    <!-- 管理员欢迎区域 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); border-radius: 15px;">
+                <div class="card-body text-white p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-2">
+                                <i class="fas fa-shield-alt me-3"></i>
+                                管理员控制面板
+                            </h2>
+                            <p class="mb-0 opacity-75">
+                                系统管理 • 用户监控 • 数据统计 • 
+                                ${new Date().toLocaleDateString('zh-CN', { 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric'
+                                })}
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <div class="d-flex flex-column align-items-md-end">
+                                <div class="mb-2">
+                                    <span class="badge bg-light text-dark px-3 py-2">
+                                        <i class="fas fa-crown me-1"></i>
+                                        超级管理员
+                                    </span>
+                                </div>
+                                <small class="opacity-75">
+                                    <i class="fas fa-user me-1"></i>
+                                    ${user.username}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统统计卡片 -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="fas fa-users fa-3x text-primary"></i>
+                    </div>
+                    <h3 class="text-primary mb-2">${stats.users}</h3>
+                    <p class="text-muted mb-0">总用户数</p>
+                    <small class="text-success">
+                        <i class="fas fa-user-check me-1"></i>
+                        ${stats.online} 在线
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="fas fa-book fa-3x text-success"></i>
+                    </div>
+                    <h3 class="text-success mb-2">${stats.terms}</h3>
+                    <p class="text-muted mb-0">术语总数</p>
+                    <small class="text-info">
+                        <i class="fas fa-plus me-1"></i>
+                        持续增长
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="fas fa-tags fa-3x text-info"></i>
+                    </div>
+                    <h3 class="text-info mb-2">${stats.categories}</h3>
+                    <p class="text-muted mb-0">分类数量</p>
+                    <small class="text-primary">
+                        <i class="fas fa-layer-group me-1"></i>
+                        已分类
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <i class="fas fa-chart-line fa-3x text-warning"></i>
+                    </div>
+                    <h3 class="text-warning mb-2">100%</h3>
+                    <p class="text-muted mb-0">系统状态</p>
+                    <small class="text-success">
+                        <i class="fas fa-check-circle me-1"></i>
+                        运行正常
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 管理功能菜单 -->
+        <div class="col-lg-8 mb-4">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs me-2 text-primary"></i>
+                        管理功能
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <!-- 用户管理 -->
+                        <div class="col-md-6">
+                            <div class="card border h-100" style="border-radius: 10px; transition: all 0.3s ease;">
+                                <div class="card-body text-center p-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-users-cog fa-3x text-primary"></i>
+                                    </div>
+                                    <h6 class="mb-2">用户管理</h6>
+                                    <p class="text-muted small mb-3">创建员工账户、查看密码、重置密码</p>
+                                    <a href="/admin/users" class="btn btn-primary btn-sm btn-custom">
+                                        <i class="fas fa-arrow-right me-1"></i>进入管理
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 登录监控 -->
+                        <div class="col-md-6">
+                            <div class="card border h-100" style="border-radius: 10px; transition: all 0.3s ease;">
+                                <div class="card-body text-center p-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-map-marker-alt fa-3x text-success"></i>
+                                    </div>
+                                    <h6 class="mb-2">登录监控</h6>
+                                    <p class="text-muted small mb-3">查看登录日志、IP地址、地理位置</p>
+                                    <a href="/admin/login-logs" class="btn btn-success btn-sm btn-custom">
+                                        <i class="fas fa-arrow-right me-1"></i>查看日志
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 术语管理 -->
+                        <div class="col-md-6">
+                            <div class="card border h-100" style="border-radius: 10px; transition: all 0.3s ease;">
+                                <div class="card-body text-center p-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-book-open fa-3x text-info"></i>
+                                    </div>
+                                    <h6 class="mb-2">术语管理</h6>
+                                    <p class="text-muted small mb-3">管理所有术语、分类和内容</p>
+                                    <a href="/" class="btn btn-info btn-sm btn-custom">
+                                        <i class="fas fa-arrow-right me-1"></i>管理术语
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 活动日志 -->
+                        <div class="col-md-6">
+                            <div class="card border h-100" style="border-radius: 10px; transition: all 0.3s ease;">
+                                <div class="card-body text-center p-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-history fa-3x text-warning"></i>
+                                    </div>
+                                    <h6 class="mb-2">活动日志</h6>
+                                    <p class="text-muted small mb-3">查看用户活动和系统操作记录</p>
+                                    <a href="/admin/activity-logs" class="btn btn-warning btn-sm btn-custom">
+                                        <i class="fas fa-arrow-right me-1"></i>查看活动
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速操作和系统信息 -->
+        <div class="col-lg-4">
+            <!-- 快速操作 -->
+            <div class="card border-0 shadow-sm mb-4" style="border-radius: 15px;">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2 text-warning"></i>
+                        快速操作
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-custom" onclick="showCreateUserModal()">
+                            <i class="fas fa-user-plus me-2"></i>创建员工账户
+                        </button>
+                        <a href="/admin/users" class="btn btn-outline-primary btn-custom">
+                            <i class="fas fa-users me-2"></i>管理用户
+                        </a>
+                        <a href="/add-term" class="btn btn-outline-success btn-custom">
+                            <i class="fas fa-plus me-2"></i>添加术语
+                        </a>
+                        <a href="/admin/login-logs" class="btn btn-outline-info btn-custom">
+                            <i class="fas fa-chart-bar me-2"></i>查看统计
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统状态 -->
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <h5 class="mb-0">
+                        <i class="fas fa-server me-2 text-success"></i>
+                        系统状态
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">服务器状态</span>
+                            <span class="badge bg-success">正常运行</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">数据库状态</span>
+                            <span class="badge bg-success">连接正常</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">在线用户</span>
+                            <span class="badge bg-primary">${stats.online} 人</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">邮件服务</span>
+                            <span class="badge bg-success">正常</span>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>
+                            系统运行时间: ${Math.floor(process.uptime() / 3600)}小时
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建用户模态框 -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius: 15px;">
+            <div class="modal-header border-0 p-4">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i>
+                    创建员工账户
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="createUserForm">
+                    <div class="mb-3">
+                        <label for="newUsername" class="form-label">
+                            <i class="fas fa-user me-2"></i>用户名 <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control form-control-custom" id="newUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newEmail" class="form-label">
+                            <i class="fas fa-envelope me-2"></i>邮箱 <span class="text-danger">*</span>
+                        </label>
+                        <input type="email" class="form-control form-control-custom" id="newEmail" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newPassword" class="form-label">
+                            <i class="fas fa-lock me-2"></i>初始密码 <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password" class="form-control form-control-custom" id="newPassword" required>
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('newPassword')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">员工密码将以明文形式存储，您可以随时查看</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newRole" class="form-label">
+                            <i class="fas fa-user-tag me-2"></i>角色
+                        </label>
+                        <select class="form-control form-control-custom" id="newRole">
+                            <option value="user">员工</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-outline-secondary btn-custom" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>取消
+                </button>
+                <button type="button" class="btn btn-primary btn-custom" onclick="createUser()">
+                    <i class="fas fa-save me-2"></i>创建账户
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 卡片悬停效果
+    const cards = document.querySelectorAll('.card.border');
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-5px)';
+            this.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '';
+        });
+    });
+});
+
+// 显示创建用户模态框
+function showCreateUserModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createUserModal'));
+    modal.show();
+    
+    // 清空表单
+    document.getElementById('createUserForm').reset();
+    document.getElementById('newUsername').focus();
+}
+
+// 切换密码可见性
+function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    const button = input.nextElementSibling;
+    const icon = button.querySelector('i');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+}
+
+// 创建用户
+async function createUser() {
+    const username = document.getElementById('newUsername').value.trim();
+    const email = document.getElementById('newEmail').value.trim();
+    const password = document.getElementById('newPassword').value;
+    const role = document.getElementById('newRole').value;
+    
+    if (!username || !email || !password) {
+        showAlert('请填写所有必填字段', 'warning');
+        return;
+    }
+    
+    // 邮箱格式验证
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showAlert('请输入有效的邮箱地址', 'warning');
+        return;
+    }
+    
+    const createBtn = document.querySelector('#createUserModal .btn-primary');
+    const originalText = createBtn.innerHTML;
+    createBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>创建中...';
+    createBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/admin/create-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, email, password, role })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert(\`用户 "\${username}" 创建成功！\${role === 'user' ? '初始密码: ' + password : ''}\`, 'success');
+            
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createUserModal'));
+            modal.hide();
+            
+            // 刷新页面或更新统计
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            showAlert(data.error || '创建用户失败', 'danger');
+        }
+    } catch (error) {
+        console.error('创建用户失败:', error);
+        showAlert('网络错误，请稍后重试', 'danger');
+    } finally {
+        createBtn.innerHTML = originalText;
+        createBtn.disabled = false;
+    }
+}
+
+// 显示提示消息
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = \`alert alert-\${type} alert-dismissible fade show alert-custom\`;
+    alertDiv.innerHTML = \`
+        <i class="fas fa-\${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+        \${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    \`;
+    
+    const container = document.querySelector('.container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // 5秒后自动消失
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// 键盘快捷键
+document.addEventListener('keydown', function(e) {
+    // Ctrl+N 创建新用户
+    if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        showCreateUserModal();
+    }
+});
+</script>
+
+<style>
+/* 管理员面板特定样式 */
+.card.border {
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.card.border:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.stats-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.modal-content {
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.form-control-custom:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+/* 动画效果 */
+.card {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .row.g-3 > .col-md-6 {
+        margin-bottom: 1rem;
+    }
+}
+</style>
+` }) %>

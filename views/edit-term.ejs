@@ -1,0 +1,556 @@
+<%- include('layout', { title: '编辑术语 - 术语管理系统', body: `
+<div class="container mt-4">
+    <!-- 页面标题 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center">
+                <a href="/dashboard" class="btn btn-outline-secondary me-3">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <div>
+                    <h2 class="mb-1">
+                        <i class="fas fa-edit me-2 text-primary"></i>
+                        编辑术语
+                    </h2>
+                    <p class="text-muted mb-0">修改术语 "${term.term}" 的信息</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- 错误和成功提示 -->
+            ${error ? `
+                <div class="alert alert-danger alert-custom" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${error}
+                </div>
+            ` : ''}
+            
+            ${success ? `
+                <div class="alert alert-success alert-custom" role="alert">
+                    <i class="fas fa-check-circle me-2"></i>
+                    ${success}
+                </div>
+            ` : ''}
+
+            <!-- 编辑术语表单 -->
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header bg-transparent border-0 p-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-edit me-2"></i>
+                            术语信息
+                        </h5>
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>
+                            创建于: ${new Date(term.created_at).toLocaleDateString('zh-CN')}
+                        </small>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form action="/edit-term/${term.id}" method="POST" id="editTermForm">
+                        <!-- 术语名称 -->
+                        <div class="mb-4">
+                            <label for="term" class="form-label">
+                                <i class="fas fa-tag me-2"></i>术语名称 <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control form-control-custom" 
+                                   id="term" 
+                                   name="term" 
+                                   value="${term.term}"
+                                   placeholder="请输入术语名称"
+                                   required 
+                                   maxlength="200">
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                术语的标准名称或专业术语
+                            </div>
+                        </div>
+
+                        <!-- 术语定义 -->
+                        <div class="mb-4">
+                            <label for="definition" class="form-label">
+                                <i class="fas fa-align-left me-2"></i>术语定义 <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control form-control-custom" 
+                                      id="definition" 
+                                      name="definition" 
+                                      rows="4" 
+                                      placeholder="请输入术语的详细定义和解释"
+                                      required 
+                                      maxlength="2000">${term.definition}</textarea>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                详细解释术语的含义、用法和相关信息
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- 分类选择 -->
+                            <div class="col-md-6 mb-4">
+                                <label for="category" class="form-label">
+                                    <i class="fas fa-folder me-2"></i>分类
+                                </label>
+                                <select class="form-control form-control-custom" id="category" name="category">
+                                    <option value="">请选择分类</option>
+                                    ${categories.map(cat => `
+                                        <option value="${cat.name}" ${term.category === cat.name ? 'selected' : ''}>
+                                            ${cat.name}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    选择术语所属的分类
+                                </div>
+                            </div>
+
+                            <!-- 语言选择 -->
+                            <div class="col-md-6 mb-4">
+                                <label for="language" class="form-label">
+                                    <i class="fas fa-globe me-2"></i>语言
+                                </label>
+                                <select class="form-control form-control-custom" id="language" name="language">
+                                    <option value="zh" ${term.language === 'zh' ? 'selected' : ''}>中文</option>
+                                    <option value="en" ${term.language === 'en' ? 'selected' : ''}>English</option>
+                                    <option value="ja" ${term.language === 'ja' ? 'selected' : ''}>日本語</option>
+                                    <option value="ko" ${term.language === 'ko' ? 'selected' : ''}>한국어</option>
+                                    <option value="fr" ${term.language === 'fr' ? 'selected' : ''}>Français</option>
+                                    <option value="de" ${term.language === 'de' ? 'selected' : ''}>Deutsch</option>
+                                    <option value="es" ${term.language === 'es' ? 'selected' : ''}>Español</option>
+                                    <option value="other" ${term.language === 'other' ? 'selected' : ''}>其他</option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    术语的主要语言
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 来源 -->
+                        <div class="mb-4">
+                            <label for="source" class="form-label">
+                                <i class="fas fa-book-open me-2"></i>来源
+                            </label>
+                            <input type="text" 
+                                   class="form-control form-control-custom" 
+                                   id="source" 
+                                   name="source" 
+                                   value="${term.source || ''}"
+                                   placeholder="例如：ISO标准、学术论文、官方文档等"
+                                   maxlength="500">
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                术语的来源或参考资料（可选）
+                            </div>
+                        </div>
+
+                        <!-- 备注 -->
+                        <div class="mb-4">
+                            <label for="notes" class="form-label">
+                                <i class="fas fa-sticky-note me-2"></i>备注
+                            </label>
+                            <textarea class="form-control form-control-custom" 
+                                      id="notes" 
+                                      name="notes" 
+                                      rows="3" 
+                                      placeholder="添加任何相关的备注信息、使用说明或注意事项"
+                                      maxlength="1000">${term.notes || ''}</textarea>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                额外的说明信息（可选）
+                            </div>
+                        </div>
+
+                        <!-- 预览区域 -->
+                        <div class="mb-4">
+                            <div class="card bg-light border-0" style="border-radius: 10px;">
+                                <div class="card-header bg-transparent border-0">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-eye me-2"></i>
+                                        实时预览
+                                    </h6>
+                                </div>
+                                <div class="card-body" id="previewArea">
+                                    <!-- 预览内容将通过JavaScript动态生成 -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 提交按钮 -->
+                        <div class="d-flex justify-content-between">
+                            <a href="/dashboard" class="btn btn-outline-secondary btn-custom">
+                                <i class="fas fa-times me-2"></i>取消
+                            </a>
+                            <div>
+                                <button type="button" class="btn btn-outline-warning btn-custom me-2" onclick="resetForm()">
+                                    <i class="fas fa-undo me-2"></i>重置
+                                </button>
+                                <button type="submit" class="btn btn-primary btn-custom">
+                                    <i class="fas fa-save me-2"></i>保存更改
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 术语历史信息 -->
+            <div class="card border-0 mt-4" style="background: rgba(52, 152, 219, 0.1); border-radius: 15px;">
+                <div class="card-body p-4">
+                    <h6 class="text-primary mb-3">
+                        <i class="fas fa-history me-2"></i>
+                        术语历史
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="fas fa-plus text-success me-2"></i>
+                                    <strong>创建时间:</strong> ${new Date(term.created_at).toLocaleString('zh-CN')}
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-edit text-info me-2"></i>
+                                    <strong>最后更新:</strong> ${new Date(term.updated_at).toLocaleString('zh-CN')}
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="fas fa-user text-primary me-2"></i>
+                                    <strong>创建者:</strong> ${user.username}
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-key text-warning me-2"></i>
+                                    <strong>术语ID:</strong> #${term.id}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('editTermForm');
+    const termInput = document.getElementById('term');
+    const definitionInput = document.getElementById('definition');
+    const categorySelect = document.getElementById('category');
+    const languageSelect = document.getElementById('language');
+    const sourceInput = document.getElementById('source');
+    const notesInput = document.getElementById('notes');
+    const previewArea = document.getElementById('previewArea');
+
+    // 保存原始值用于重置
+    const originalValues = {
+        term: termInput.value,
+        definition: definitionInput.value,
+        category: categorySelect.value,
+        language: languageSelect.value,
+        source: sourceInput.value,
+        notes: notesInput.value
+    };
+
+    // 实时预览功能
+    function updatePreview() {
+        const term = termInput.value.trim();
+        const definition = definitionInput.value.trim();
+        const category = categorySelect.value;
+        const language = languageSelect.value;
+        const source = sourceInput.value.trim();
+        const notes = notesInput.value.trim();
+
+        const languageMap = {
+            'zh': '中文',
+            'en': 'English',
+            'ja': '日本語',
+            'ko': '한국어',
+            'fr': 'Français',
+            'de': 'Deutsch',
+            'es': 'Español',
+            'other': '其他'
+        };
+
+        previewArea.innerHTML = \`
+            <div class="term-preview">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h5 class="term-title mb-0">\${term || '术语名称'}</h5>
+                    <div>
+                        \${category ? \`<span class="badge category-badge me-2">\${category}</span>\` : ''}
+                        <span class="badge language-badge">\${languageMap[language] || language}</span>
+                    </div>
+                </div>
+                
+                <p class="term-definition">\${definition || '术语定义将在这里显示...'}</p>
+                
+                \${notes ? \`
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <i class="fas fa-sticky-note me-1"></i>
+                            <strong>备注:</strong> \${notes}
+                        </small>
+                    </div>
+                \` : ''}
+                
+                \${source ? \`
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <i class="fas fa-book-open me-1"></i>
+                            <strong>来源:</strong> \${source}
+                        </small>
+                    </div>
+                \` : ''}
+                
+                <div class="term-meta">
+                    <small class="text-muted">
+                        <i class="fas fa-user me-1"></i>
+                        创建者: ${user.username}
+                        <span class="mx-2">•</span>
+                        <i class="fas fa-clock me-1"></i>
+                        最后更新: \${new Date().toLocaleDateString('zh-CN')}
+                    </small>
+                </div>
+            </div>
+        \`;
+    }
+
+    // 绑定输入事件
+    [termInput, definitionInput, categorySelect, languageSelect, sourceInput, notesInput].forEach(element => {
+        element.addEventListener('input', updatePreview);
+        element.addEventListener('change', updatePreview);
+    });
+
+    // 初始化预览
+    updatePreview();
+
+    // 检测更改
+    function hasChanges() {
+        return termInput.value !== originalValues.term ||
+               definitionInput.value !== originalValues.definition ||
+               categorySelect.value !== originalValues.category ||
+               languageSelect.value !== originalValues.language ||
+               sourceInput.value !== originalValues.source ||
+               notesInput.value !== originalValues.notes;
+    }
+
+    // 表单验证
+    form.addEventListener('submit', function(e) {
+        const term = termInput.value.trim();
+        const definition = definitionInput.value.trim();
+
+        if (!term) {
+            e.preventDefault();
+            showAlert('请输入术语名称', 'warning');
+            termInput.focus();
+            return;
+        }
+
+        if (!definition) {
+            e.preventDefault();
+            showAlert('请输入术语定义', 'warning');
+            definitionInput.focus();
+            return;
+        }
+
+        if (!hasChanges()) {
+            e.preventDefault();
+            showAlert('没有检测到任何更改', 'info');
+            return;
+        }
+
+        // 显示提交中状态
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>保存中...';
+        submitBtn.disabled = true;
+
+        // 如果提交失败，恢复按钮状态
+        setTimeout(() => {
+            if (submitBtn.disabled) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        }, 5000);
+    });
+
+    // 页面离开提醒
+    window.addEventListener('beforeunload', function(e) {
+        if (hasChanges()) {
+            e.preventDefault();
+            e.returnValue = '您有未保存的更改，确定要离开吗？';
+        }
+    });
+
+    // 字符计数
+    function setupCharacterCount(input, maxLength) {
+        const countElement = document.createElement('small');
+        countElement.className = 'text-muted float-end';
+        input.parentNode.appendChild(countElement);
+
+        function updateCount() {
+            const remaining = maxLength - input.value.length;
+            countElement.textContent = \`\${input.value.length}/\${maxLength}\`;
+            countElement.className = remaining < 50 ? 'text-warning float-end' : 'text-muted float-end';
+        }
+
+        input.addEventListener('input', updateCount);
+        updateCount();
+    }
+
+    setupCharacterCount(termInput, 200);
+    setupCharacterCount(definitionInput, 2000);
+    setupCharacterCount(sourceInput, 500);
+    setupCharacterCount(notesInput, 1000);
+
+    // 自动聚焦到术语名称输入框
+    termInput.focus();
+    termInput.setSelectionRange(termInput.value.length, termInput.value.length);
+});
+
+// 重置表单到原始值
+function resetForm() {
+    if (confirm('确定要重置所有更改吗？这将恢复到编辑前的状态。')) {
+        document.getElementById('term').value = '${term.term}';
+        document.getElementById('definition').value = '${term.definition}';
+        document.getElementById('category').value = '${term.category || ''}';
+        document.getElementById('language').value = '${term.language}';
+        document.getElementById('source').value = '${term.source || ''}';
+        document.getElementById('notes').value = '${term.notes || ''}';
+        
+        // 更新预览
+        setTimeout(() => {
+            const event = new Event('input');
+            document.getElementById('term').dispatchEvent(event);
+        }, 100);
+    }
+}
+
+// 显示提示消息
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = \`alert alert-\${type} alert-dismissible fade show alert-custom\`;
+    alertDiv.innerHTML = \`
+        <i class="fas fa-\${type === 'warning' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+        \${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    \`;
+    
+    const container = document.querySelector('.container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // 3秒后自动消失
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 3000);
+}
+
+// 键盘快捷键
+document.addEventListener('keydown', function(e) {
+    // Ctrl+S 保存
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('editTermForm').submit();
+    }
+    
+    // Ctrl+R 重置
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        resetForm();
+    }
+    
+    // Esc 取消
+    if (e.key === 'Escape') {
+        if (confirm('确定要取消编辑吗？未保存的更改将丢失。')) {
+            window.location.href = '/dashboard';
+        }
+    }
+});
+</script>
+
+<style>
+/* 与add-term.ejs相同的样式 */
+.form-control-custom:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.term-preview {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    border: 1px solid #e9ecef;
+}
+
+.term-title {
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.term-definition {
+    color: #5a6c7d;
+    line-height: 1.6;
+}
+
+.term-meta {
+    border-top: 1px solid #ecf0f1;
+    padding-top: 0.75rem;
+    margin-top: 1rem;
+}
+
+.category-badge {
+    background: linear-gradient(45deg, #3498db, #2980b9);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+.language-badge {
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+/* 动画效果 */
+.card {
+    animation: slideInUp 0.5s ease-out;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .d-flex.justify-content-between > div {
+        display: flex;
+        gap: 0.5rem;
+    }
+}
+</style>
+` }) %>
