@@ -45,6 +45,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 // 会话配置
 app.use(session({
@@ -977,4 +978,5 @@ process.on('SIGINT', () => {
     }
     process.exit(0);
   });
+
 });
