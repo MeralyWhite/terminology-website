@@ -27,8 +27,8 @@ const transporter = nodemailer.createTransporter({
   }
 });
 
-// 管理员邮箱
-const ADMIN_EMAIL = 'z-2024@qq.com';
+// 管理员邮箱 - 从环境变量获取
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 
 // 安全中间件
 app.use(helmet());
@@ -184,7 +184,7 @@ db.serialize(() => {
             console.log('✅ 默认管理员账户创建成功');
             console.log('   用户名: admin');
             console.log('   密码: 请查看环境变量 ADMIN_PASSWORD');
-            console.log('   邮箱:', ADMIN_EMAIL);
+            console.log('   邮箱: 请查看环境变量 ADMIN_EMAIL');
           }
         });
       } catch (error) {
@@ -1120,7 +1120,7 @@ app.listen(PORT, () => {
 ===========================================
 📍 访问地址: http://localhost:${PORT}
 📊 环境: ${process.env.NODE_ENV || 'development'}
-📧 管理员邮箱: ${ADMIN_EMAIL}
+📧 管理员邮箱: 请查看环境变量 ADMIN_EMAIL
 🔧 系统诊断: http://localhost:${PORT}/test
 ===========================================
   `);
