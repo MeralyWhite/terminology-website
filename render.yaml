@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: terminology-management-system
+    env: node
+    plan: free
+    region: singapore
+    buildCommand: |
+      npm install
+      npm run init
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: ADMIN_EMAIL
+        value: z-2024@qq.com
+      - key: DATABASE_PATH
+        value: ./database.sqlite
+      - key: BCRYPT_ROUNDS
+        value: 10
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+      - key: SESSION_MAX_AGE
+        value: 86400000
+    autoDeploy: true
+    disk:
+      name: terminology-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1
