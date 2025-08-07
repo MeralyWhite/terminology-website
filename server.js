@@ -19,7 +19,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 邮件配置
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   service: 'qq',
   auth: {
     user: process.env.EMAIL_USER || 'your-email@qq.com',
@@ -162,7 +162,7 @@ db.serialize(() => {
 
   // 创建默认管理员账户（安全版本）
   console.log('🔧 正在检查管理员账户...');
-  
+
   // 检查是否已存在管理员账户
   db.get('SELECT * FROM users WHERE username = ? OR role = ?', ['admin', 'admin'], async (err, existingAdmin) => {
     if (err) {
@@ -175,7 +175,7 @@ db.serialize(() => {
         // 从环境变量获取管理员密码，如果没有设置则使用默认密码
         const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
         const hashedPassword = await bcrypt.hash(adminPassword, 10);
-        
+
         db.run(`INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)`,
           ['admin', ADMIN_EMAIL, hashedPassword, 'admin'], (err) => {
           if (err) {
@@ -184,7 +184,7 @@ db.serialize(() => {
             console.log('✅ 默认管理员账户创建成功');
             console.log('   用户名: admin');
             console.log('   密码: 请查看环境变量 ADMIN_PASSWORD');
-            console.log('   邮箱: 请查看环境变量 ADMIN_EMAIL');
+            console.log('   邮箱:', ADMIN_EMAIL);
           }
         });
       } catch (error) {
@@ -1120,7 +1120,7 @@ app.listen(PORT, () => {
 ===========================================
 📍 访问地址: http://localhost:${PORT}
 📊 环境: ${process.env.NODE_ENV || 'development'}
-📧 管理员邮箱: 请查看环境变量 ADMIN_EMAIL
+📧 管理员邮箱: ${ADMIN_EMAIL}
 🔧 系统诊断: http://localhost:${PORT}/test
 ===========================================
   `);
