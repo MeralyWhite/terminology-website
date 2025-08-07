@@ -72,8 +72,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24小时
+    secure: false, // 在 Render 等平台上设置为 false，因为内部通信可能是 HTTP
+    maxAge: 24 * 60 * 60 * 1000, // 24小时
+    httpOnly: true, // 防止 XSS 攻击
+    sameSite: 'lax' // CSRF 保护
   }
 }));
 
@@ -1140,3 +1142,4 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
+
