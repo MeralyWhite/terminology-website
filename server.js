@@ -1,5 +1,5 @@
 // 术语管理系统 - 主服务器文件
-// 修复版本 - 解决视图路径问题
+// 修复版本 - 解决数据库初始化问题
 
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
@@ -11,21 +11,9 @@ const helmet = require('helmet');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const axios = require('axios');
-const nodemailer = require('nodemailer');
-const useragent = require('useragent');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// 邮件配置
-const transporter = nodemailer.createTransport({
-  service: 'qq',
-  auth: {
-    user: process.env.EMAIL_USER || 'your-email@qq.com',
-    pass: process.env.EMAIL_PASS || 'your-email-password'
-  }
-});
 
 // 管理员邮箱
 const ADMIN_EMAIL = 'z-2024@qq.com';
@@ -46,7 +34,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 视图引擎配置 - 修复版本
+// 视图引擎配置
 app.set('view engine', 'ejs');
 const viewsPath = path.resolve(__dirname, 'views');
 app.set('views', viewsPath);
@@ -71,132 +59,134 @@ app.use(session({
 // 数据库初始化
 const db = new sqlite3.Database('terminology.db');
 
+// 修复的数据库初始化函数
 function initializeDatabase() {
   console.log('🗄️ 正在初始化数据库...');
   
-  // 用户表
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT DEFAULT 'user',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_login DATETIME,
-    is_active BOOLEAN DEFAULT 1,
-    profile_data TEXT
-  )`);
+  // 使用 serialize 确保表按顺序创建
+  db.serialize(() => {
+    // 1. 先创建用户表
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login DATETIME,
+      is_active BOOLEAN DEFAULT 1,
+      profile_data TEXT
+    )`, (err) => {
+      if (err) console.error('创建用户表失败:', err);
+      else console.log('✅ 用户表创建成功');
+    });
 
-  // 术语表
-  db.run(`CREATE TABLE IF NOT EXISTS terms (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    term TEXT NOT NULL,
-    definition TEXT NOT NULL,
-    category_id INTEGER,
-    language TEXT DEFAULT 'zh',
-    source TEXT,
-    examples TEXT,
-    synonyms TEXT,
-    antonyms TEXT,
-    difficulty_level INTEGER DEFAULT 1,
-    usage_frequency INTEGER DEFAULT 0,
-    created_by INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    is_approved BOOLEAN DEFAULT 0,
-    tags TEXT,
-    pronunciation TEXT,
-    etymology TEXT,
-    related_terms TEXT,
-    FOREIGN KEY (category_id) REFERENCES categories (id),
-    FOREIGN KEY (created_by) REFERENCES users (id)
-  )`);
+    // 2. 创建分类表
+    db.run(`CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      description TEXT,
+      parent_id INTEGER,
+      color TEXT DEFAULT '#007bff',
+      icon TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) console.error('创建分类表失败:', err);
+      else console.log('✅ 分类表创建成功');
+    });
 
-  // 分类表
-  db.run(`CREATE TABLE IF NOT EXISTS categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE NOT NULL,
-    description TEXT,
-    parent_id INTEGER,
-    color TEXT DEFAULT '#007bff',
-    icon TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (parent_id) REFERENCES categories (id)
-  )`);
+    // 3. 创建术语表（依赖前两个表）
+    db.run(`CREATE TABLE IF NOT EXISTS terms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      term TEXT NOT NULL,
+      definition TEXT NOT NULL,
+      category_id INTEGER,
+      language TEXT DEFAULT 'zh',
+      source TEXT,
+      examples TEXT,
+      synonyms TEXT,
+      antonyms TEXT,
+      difficulty_level INTEGER DEFAULT 1,
+      usage_frequency INTEGER DEFAULT 0,
+      created_by INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_approved BOOLEAN DEFAULT 0,
+      tags TEXT,
+      pronunciation TEXT,
+      etymology TEXT,
+      related_terms TEXT
+    )`, (err) => {
+      if (err) console.error('创建术语表失败:', err);
+      else console.log('✅ 术语表创建成功');
+    });
 
-  // 用户活动日志表
-  db.run(`CREATE TABLE IF NOT EXISTS user_activities (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    action TEXT NOT NULL,
-    target_type TEXT,
-    target_id INTEGER,
-    details TEXT,
-    ip_address TEXT,
-    user_agent TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-  )`);
+    // 4. 创建其他表
+    db.run(`CREATE TABLE IF NOT EXISTS user_activities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      action TEXT NOT NULL,
+      target_type TEXT,
+      target_id INTEGER,
+      details TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) console.error('创建活动日志表失败:', err);
+      else console.log('✅ 活动日志表创建成功');
+    });
 
-  // 术语评分表
-  db.run(`CREATE TABLE IF NOT EXISTS term_ratings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    term_id INTEGER,
-    user_id INTEGER,
-    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
-    comment TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (term_id) REFERENCES terms (id),
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    UNIQUE(term_id, user_id)
-  )`);
+    db.run(`CREATE TABLE IF NOT EXISTS term_ratings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      term_id INTEGER,
+      user_id INTEGER,
+      rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+      comment TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(term_id, user_id)
+    )`, (err) => {
+      if (err) console.error('创建评分表失败:', err);
+      else console.log('✅ 评分表创建成功');
+    });
 
-  // 收藏表
-  db.run(`CREATE TABLE IF NOT EXISTS favorites (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    term_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    FOREIGN KEY (term_id) REFERENCES terms (id),
-    UNIQUE(user_id, term_id)
-  )`);
+    db.run(`CREATE TABLE IF NOT EXISTS favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      term_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, term_id)
+    )`, (err) => {
+      if (err) console.error('创建收藏表失败:', err);
+      else console.log('✅ 收藏表创建成功');
+    });
 
-  // 学习进度表
-  db.run(`CREATE TABLE IF NOT EXISTS learning_progress (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    term_id INTEGER,
-    mastery_level INTEGER DEFAULT 0,
-    last_reviewed DATETIME,
-    review_count INTEGER DEFAULT 0,
-    correct_count INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    FOREIGN KEY (term_id) REFERENCES terms (id),
-    UNIQUE(user_id, term_id)
-  )`);
+    // 5. 插入默认数据
+    db.run(`INSERT OR IGNORE INTO categories (name, description, color, icon) VALUES 
+      ('计算机科学', '计算机科学相关术语', '#007bff', 'fas fa-laptop-code'),
+      ('数学', '数学相关术语', '#28a745', 'fas fa-calculator'),
+      ('物理学', '物理学相关术语', '#dc3545', 'fas fa-atom'),
+      ('化学', '化学相关术语', '#ffc107', 'fas fa-flask'),
+      ('生物学', '生物学相关术语', '#17a2b8', 'fas fa-dna'),
+      ('医学', '医学相关术语', '#6f42c1', 'fas fa-heartbeat'),
+      ('工程学', '工程学相关术语', '#fd7e14', 'fas fa-cogs'),
+      ('经济学', '经济学相关术语', '#20c997', 'fas fa-chart-line'),
+      ('法律', '法律相关术语', '#6c757d', 'fas fa-balance-scale'),
+      ('语言学', '语言学相关术语', '#e83e8c', 'fas fa-language')`, (err) => {
+      if (err) console.error('插入默认分类失败:', err);
+      else console.log('✅ 默认分类插入成功');
+    });
 
-  // 插入默认分类
-  db.run(`INSERT OR IGNORE INTO categories (name, description, color, icon) VALUES 
-    ('计算机科学', '计算机科学相关术语', '#007bff', 'fas fa-laptop-code'),
-    ('数学', '数学相关术语', '#28a745', 'fas fa-calculator'),
-    ('物理学', '物理学相关术语', '#dc3545', 'fas fa-atom'),
-    ('化学', '化学相关术语', '#ffc107', 'fas fa-flask'),
-    ('生物学', '生物学相关术语', '#17a2b8', 'fas fa-dna'),
-    ('医学', '医学相关术语', '#6f42c1', 'fas fa-heartbeat'),
-    ('工程学', '工程学相关术语', '#fd7e14', 'fas fa-cogs'),
-    ('经济学', '经济学相关术语', '#20c997', 'fas fa-chart-line'),
-    ('法律', '法律相关术语', '#6c757d', 'fas fa-balance-scale'),
-    ('语言学', '语言学相关术语', '#e83e8c', 'fas fa-language')`);
+    // 6. 创建管理员账户
+    const adminPassword = bcrypt.hashSync('admin123', 10);
+    db.run(`INSERT OR IGNORE INTO users (username, email, password, role) VALUES (?, ?, ?, ?)`,
+      ['admin', ADMIN_EMAIL, adminPassword, 'admin'], (err) => {
+      if (err) console.error('创建管理员账户失败:', err);
+      else console.log('✅ 管理员账户创建成功');
+    });
 
-  // 创建管理员账户
-  const adminPassword = bcrypt.hashSync('admin123', 10);
-  db.run(`INSERT OR IGNORE INTO users (username, email, password, role) VALUES (?, ?, ?, ?)`,
-    ['admin', ADMIN_EMAIL, adminPassword, 'admin']);
-
-  console.log('✅ 数据库初始化完成');
+    console.log('✅ 数据库初始化完成');
+  });
 }
 
 // 认证中间件
@@ -205,15 +195,6 @@ function requireAuth(req, res, next) {
     next();
   } else {
     res.redirect('/login');
-  }
-}
-
-// 管理员权限中间件
-function requireAdmin(req, res, next) {
-  if (req.session.userId && req.session.userRole === 'admin') {
-    next();
-  } else {
-    res.status(403).send('需要管理员权限');
   }
 }
 
@@ -227,7 +208,7 @@ function logActivity(userId, action, targetType = null, targetId = null, details
     [userId, action, targetType, targetId, details, ipAddress, userAgent]);
 }
 
-// 安全渲染函数 - 防止视图错误
+// 安全渲染函数
 function safeRender(res, view, data = {}) {
   try {
     res.render(view, data);
@@ -239,7 +220,7 @@ function safeRender(res, view, data = {}) {
       <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>系统错误 - 术语管理系统</title>
+          <title>系统错误</title>
           <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
       </head>
       <body>
@@ -327,18 +308,12 @@ app.get('/', (req, res) => {
   const searchQuery = req.query.q || '';
   const category = req.query.category || '';
   const language = req.query.language || '';
-  const page = parseInt(req.query.page) || 1;
-  const limit = 20;
-  const offset = (page - 1) * limit;
 
   let sql = `SELECT t.*, c.name as category_name, c.color as category_color,
-             u.username as created_by_username,
-             AVG(tr.rating) as avg_rating,
-             COUNT(tr.rating) as rating_count
+             u.username as created_by_username
              FROM terms t
              LEFT JOIN categories c ON t.category_id = c.id
              LEFT JOIN users u ON t.created_by = u.id
-             LEFT JOIN term_ratings tr ON t.id = tr.term_id
              WHERE t.is_approved = 1`;
 
   let params = [];
@@ -359,19 +334,18 @@ app.get('/', (req, res) => {
     params.push(language);
   }
 
-  sql += ` GROUP BY t.id ORDER BY t.usage_frequency DESC, t.created_at DESC LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
+  sql += ` ORDER BY t.usage_frequency DESC, t.created_at DESC LIMIT 50`;
 
   db.all(sql, params, (err, terms) => {
     if (err) {
-      console.error(err);
+      console.error('查询术语失败:', err);
       return res.status(500).send('数据库错误');
     }
 
     // 获取所有分类
     db.all('SELECT DISTINCT name FROM categories ORDER BY name', (err, categories) => {
       if (err) {
-        console.error(err);
+        console.error('查询分类失败:', err);
         categories = [];
       }
 
@@ -411,7 +385,7 @@ app.post('/login', (req, res) => {
 
   db.get('SELECT * FROM users WHERE username = ? AND is_active = 1', [username], (err, user) => {
     if (err) {
-      console.error(err);
+      console.error('登录查询失败:', err);
       return safeRender(res, 'login', { error: '系统错误，请稍后重试' });
     }
 
@@ -434,6 +408,30 @@ app.post('/login', (req, res) => {
   });
 });
 
+// 用户仪表板
+app.get('/dashboard', requireAuth, (req, res) => {
+  const userId = req.session.userId;
+
+  db.get(`SELECT COUNT(*) as term_count FROM terms WHERE created_by = ?`, [userId], (err, termStats) => {
+    if (err) {
+      console.error('查询用户术语统计失败:', err);
+      termStats = { term_count: 0 };
+    }
+
+    safeRender(res, 'dashboard', {
+      user: {
+        id: req.session.userId,
+        username: req.session.username,
+        role: req.session.userRole
+      },
+      stats: {
+        terms: termStats.term_count,
+        favorites: 0
+      }
+    });
+  });
+});
+
 // 注销
 app.post('/logout', (req, res) => {
   if (req.session.userId) {
@@ -441,152 +439,6 @@ app.post('/logout', (req, res) => {
   }
   req.session.destroy();
   res.redirect('/');
-});
-
-// 用户仪表板
-app.get('/dashboard', requireAuth, (req, res) => {
-  // 获取用户统计信息
-  const userId = req.session.userId;
-
-  db.get(`SELECT COUNT(*) as term_count FROM terms WHERE created_by = ?`, [userId], (err, termStats) => {
-    if (err) {
-      console.error(err);
-      termStats = { term_count: 0 };
-    }
-
-    db.get(`SELECT COUNT(*) as favorite_count FROM favorites WHERE user_id = ?`, [userId], (err, favoriteStats) => {
-      if (err) {
-        console.error(err);
-        favoriteStats = { favorite_count: 0 };
-      }
-
-      safeRender(res, 'dashboard', {
-        user: {
-          id: req.session.userId,
-          username: req.session.username,
-          role: req.session.userRole
-        },
-        stats: {
-          terms: termStats.term_count,
-          favorites: favoriteStats.favorite_count
-        }
-      });
-    });
-  });
-});
-
-// 添加术语页面
-app.get('/add-term', requireAuth, (req, res) => {
-  db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
-    if (err) {
-      console.error(err);
-      categories = [];
-    }
-
-    safeRender(res, 'add-term', {
-      user: {
-        id: req.session.userId,
-        username: req.session.username,
-        role: req.session.userRole
-      },
-      categories,
-      error: null,
-      success: null
-    });
-  });
-});
-
-// 添加术语处理
-app.post('/add-term', requireAuth, (req, res) => {
-  const { term, definition, category_id, language, source, examples, tags, pronunciation, etymology } = req.body;
-
-  if (!term || !definition) {
-    return db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
-      safeRender(res, 'add-term', {
-        user: { id: req.session.userId, username: req.session.username, role: req.session.userRole },
-        categories: categories || [],
-        error: '术语和定义不能为空',
-        success: null
-      });
-    });
-  }
-
-  const isApproved = req.session.userRole === 'admin' ? 1 : 0;
-
-  db.run(`INSERT INTO terms (term, definition, category_id, language, source, examples, tags,
-           pronunciation, etymology, created_by, is_approved)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [term, definition, category_id || null, language || 'zh', source, examples, tags,
-     pronunciation, etymology, req.session.userId, isApproved], function(err) {
-
-    if (err) {
-      console.error(err);
-      return db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
-        safeRender(res, 'add-term', {
-          user: { id: req.session.userId, username: req.session.username, role: req.session.userRole },
-          categories: categories || [],
-          error: '添加术语失败，请重试',
-          success: null
-        });
-      });
-    }
-
-    logActivity(req.session.userId, 'create_term', 'term', this.lastID, term, req);
-
-    db.all('SELECT * FROM categories ORDER BY name', (err, categories) => {
-      safeRender(res, 'add-term', {
-        user: { id: req.session.userId, username: req.session.username, role: req.session.userRole },
-        categories: categories || [],
-        error: null,
-        success: isApproved ? '术语添加成功！' : '术语已提交，等待管理员审核'
-      });
-    });
-  });
-});
-
-// 404处理
-app.use((req, res) => {
-  res.status(404).send(`
-    <!DOCTYPE html>
-    <html lang="zh-CN">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>404 - 页面未找到</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body>
-        <div class="container mt-5 text-center">
-            <h1>404 - 页面未找到</h1>
-            <p>您访问的页面不存在</p>
-            <a href="/" class="btn btn-primary">返回首页</a>
-        </div>
-    </body>
-    </html>
-  `);
-});
-
-// 错误处理
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send(`
-    <!DOCTYPE html>
-    <html lang="zh-CN">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>500 - 服务器错误</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body>
-        <div class="container mt-5 text-center">
-            <h1>500 - 服务器错误</h1>
-            <p>服务器遇到了一个错误</p>
-            <a href="/" class="btn btn-primary">返回首页</a>
-        </div>
-    </body>
-    </html>
-  `);
 });
 
 // 启动服务器
